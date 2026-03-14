@@ -11,3 +11,9 @@ export {
 } from "./analyzer/llm-analyzer.js";
 export type { LLMFileAnalysis, LLMProjectSummary } from "./analyzer/llm-analyzer.js";
 export { SearchEngine, type SearchResult, type SearchOptions } from "./search.js";
+export {
+  getChangedFiles,
+  isStale,
+  mergeGraphUpdate,
+  type StalenessResult,
+} from "./staleness.js";

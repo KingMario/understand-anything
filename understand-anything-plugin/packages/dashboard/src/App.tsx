@@ -32,6 +32,7 @@ function App() {
       // Help
       {
         key: "?",
+        shiftKey: true,
         description: "Show keyboard shortcuts",
         action: () => setShowKeyboardHelp((prev) => !prev),
         category: "General",
@@ -43,14 +44,14 @@ function App() {
         action: () => {
           // Read from store at invocation time to avoid stale closures
           const state = useDashboardStore.getState();
-          if (showKeyboardHelp) {
-            setShowKeyboardHelp(false);
-          } else if (state.codeViewerOpen) {
+          if (state.codeViewerOpen) {
             state.closeCodeViewer();
           } else if (state.selectedNodeId) {
             state.selectNode(null);
           } else if (state.tourActive) {
             state.stopTour();
+          } else {
+            setShowKeyboardHelp(false);
           }
         },
         category: "Navigation",
@@ -109,11 +110,11 @@ function App() {
         category: "View",
       },
     ],
-    [showKeyboardHelp]
+    []
   );
 
   // Register keyboard shortcuts
-  useKeyboardShortcuts(shortcuts, !showKeyboardHelp);
+  useKeyboardShortcuts(shortcuts);
 
   useEffect(() => {
     fetch("/knowledge-graph.json")
@@ -219,8 +220,11 @@ function App() {
       {/* Main content: Graph + Sidebar */}
       <div className="flex-1 flex min-h-0 relative">
         {/* Graph area */}
-        <div className="flex-1 min-w-0 min-h-0">
+        <div className="flex-1 min-w-0 min-h-0 relative">
           <GraphView />
+          <div className="absolute top-3 right-3 text-sm text-text-muted/60 pointer-events-none select-none">
+            Press <kbd className="kbd">?</kbd> for keyboard shortcuts
+          </div>
         </div>
 
         {/* Right sidebar */}

@@ -60,10 +60,12 @@ export function formatShortcutKey(shortcut: KeyboardShortcut): string {
   if (shortcut.ctrlKey || shortcut.metaKey) {
     keys.push(isMac ? "⌘" : "Ctrl");
   }
-  if (shortcut.shiftKey) keys.push("⇧");
+  // Don't show ⇧ for keys that inherently require Shift (e.g. ?, !, @)
+  const isShiftedPunctuation = shortcut.key.length === 1 && /[^a-zA-Z0-9]/.test(shortcut.key);
+  if (shortcut.shiftKey && !isShiftedPunctuation) keys.push("⇧");
   if (shortcut.altKey) keys.push(isMac ? "⌥" : "Alt");
 
-  keys.push(shortcut.key.toUpperCase());
+  keys.push(isShiftedPunctuation ? shortcut.key : shortcut.key.toUpperCase());
 
   return keys.join(" + ");
 }

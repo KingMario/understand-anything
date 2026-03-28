@@ -21,7 +21,7 @@ import PortalNode from "./PortalNode";
 import type { PortalFlowNode } from "./PortalNode";
 import Breadcrumb from "./Breadcrumb";
 import { useDashboardStore } from "../store";
-import type { KnowledgeGraph } from "@understand-anything/core/types";
+import type { KnowledgeGraph, NodeType } from "@understand-anything/core/types";
 import { useTheme } from "../themes/index.ts";
 import {
   applyDagreLayout,
@@ -43,6 +43,20 @@ const nodeTypes = {
   "layer-cluster": LayerClusterNode,
   portal: PortalNode,
 };
+
+import type { NodeCategory } from "../store";
+
+/**
+ * Maps each NodeType to a filter category. Must be kept in sync with core NodeType.
+ * Unknown types default to "code" with a development warning.
+ */
+const NODE_TYPE_TO_CATEGORY: Record<NodeType, NodeCategory> = {
+  file: "code", function: "code", class: "code", module: "code", concept: "code",
+  config: "config",
+  document: "docs",
+  service: "infra", resource: "infra", pipeline: "infra",
+  table: "data", endpoint: "data", schema: "data",
+} as const;
 
 // ── Helper components that must live inside <ReactFlow> ────────────────
 
@@ -200,6 +214,7 @@ function useLayerDetailTopology() {
   const changedNodeIds = useDashboardStore((s) => s.changedNodeIds);
   const affectedNodeIds = useDashboardStore((s) => s.affectedNodeIds);
   const focusNodeId = useDashboardStore((s) => s.focusNodeId);
+  const nodeTypeFilters = useDashboardStore((s) => s.nodeTypeFilters);
   const drillIntoLayer = useDashboardStore((s) => s.drillIntoLayer);
 
   const handleNodeSelect = useCallback(
@@ -218,12 +233,32 @@ function useLayerDetailTopology() {
 
     const layerNodeIds = new Set(activeLayer.nodeIds);
 
-    // Non-technical persona only sees concept/module/file nodes
+    // All top-level (file-level) node types that should appear in the graph.
+    // This includes the 8 new non-code types plus the original "file" type.
+    const fileLevelTypes = new Set([
+      "file", "config", "document", "service", "table",
+      "endpoint", "pipeline", "schema", "resource",
+    ]);
+
+    // Non-technical persona: show module, concept, and file-level types (hide function/class)
+    // Junior/experienced persona: show everything including function/class
     let filteredGraphNodes = persona === "non-technical"
       ? graph.nodes.filter(
-          (n) => layerNodeIds.has(n.id) && (n.type === "concept" || n.type === "module" || n.type === "file"),
+          (n) => layerNodeIds.has(n.id) && (n.type === "concept" || n.type === "module" || fileLevelTypes.has(n.type)),
         )
-      : graph.nodes.filter((n) => layerNodeIds.has(n.id) && n.type === "file");
+      : graph.nodes.filter((n) => layerNodeIds.has(n.id) && (fileLevelTypes.has(n.type) || n.type === "module" || n.type === "concept" || n.type === "function" || n.type === "class"));
+
+    // Apply node type category filters
+    filteredGraphNodes = filteredGraphNodes.filter((n) => {
+      const category = NODE_TYPE_TO_CATEGORY[n.type as NodeType];
+      if (!category) {
+        if (import.meta.env.DEV) {
+          console.warn(`[GraphView] Unknown node type "${n.type}" — defaulting to "code" category`);
+        }
+      }
+      const effectiveCategory = category ?? "code";
+      return nodeTypeFilters[effectiveCategory] !== false;
+    });
 
     let filteredNodeIds = new Set(filteredGraphNodes.map((n) => n.id));
 
@@ -360,7 +395,7 @@ function useLayerDetailTopology() {
 
     const laid = applyDagreLayout(allFlowNodes, allFlowEdges, "TB", dims);
     return { nodes: laid.nodes, edges: laid.edges, portalNodes, portalEdges, filteredEdges: filteredGraphEdges };
-  }, [graph, activeLayerId, persona, handleNodeSelect, diffMode, changedNodeIds, affectedNodeIds, focusNodeId, drillIntoLayer]);
+  }, [graph, activeLayerId, persona, handleNodeSelect, diffMode, changedNodeIds, affectedNodeIds, focusNodeId, nodeTypeFilters, drillIntoLayer]);
 }
 
 /**

@@ -9,6 +9,8 @@ import type {
 export type Persona = "non-technical" | "junior" | "experienced";
 export type NavigationLevel = "overview" | "layer-detail";
 
+/** Categories used for node type filter toggles. Single source of truth for NodeCategory. */
+export type NodeCategory = "code" | "config" | "docs" | "infra" | "data";
 
 /** Find which layer a node belongs to. Returns layerId or null. */
 function findNodeLayer(graph: KnowledgeGraph, nodeId: string): string | null {
@@ -52,6 +54,10 @@ interface DashboardStore {
 
   // Sidebar navigation history (stack of visited node IDs)
   nodeHistory: string[];
+
+  // Node type category filters
+  nodeTypeFilters: Record<NodeCategory, boolean>;
+  toggleNodeTypeFilter: (category: NodeCategory) => void;
 
   setGraph: (graph: KnowledgeGraph) => void;
   selectNode: (nodeId: string | null) => void;
@@ -124,6 +130,16 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
 
   focusNodeId: null,
   nodeHistory: [],
+
+  nodeTypeFilters: { code: true, config: true, docs: true, infra: true, data: true },
+
+  toggleNodeTypeFilter: (category) =>
+    set((state) => ({
+      nodeTypeFilters: {
+        ...state.nodeTypeFilters,
+        [category]: !state.nodeTypeFilters[category],
+      },
+    })),
 
   setGraph: (graph) => {
     const searchEngine = new SearchEngine(graph.nodes);

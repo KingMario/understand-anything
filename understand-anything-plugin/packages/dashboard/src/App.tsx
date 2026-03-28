@@ -19,6 +19,13 @@ import { ThemeProvider } from "./themes/index.ts";
 import { ThemePicker } from "./components/ThemePicker.tsx";
 import type { ThemeConfig } from "./themes/index.ts";
 
+// Extract the access token from the URL so protected endpoints can be fetched.
+const ACCESS_TOKEN = new URLSearchParams(window.location.search).get("token");
+
+function tokenUrl(path: string): string {
+  return ACCESS_TOKEN ? `${path}?token=${ACCESS_TOKEN}` : path;
+}
+
 function App() {
   const graph = useDashboardStore((s) => s.graph);
   const setGraph = useDashboardStore((s) => s.setGraph);
@@ -34,7 +41,7 @@ function App() {
   const [metaTheme, setMetaTheme] = useState<ThemeConfig | null>(null);
 
   useEffect(() => {
-    fetch("/meta.json")
+    fetch(tokenUrl("/meta.json"))
       .then((r) => (r.ok ? r.json() : null))
       .then((meta) => {
         if (meta?.theme) setMetaTheme(meta.theme);
@@ -133,7 +140,7 @@ function App() {
   useKeyboardShortcuts(shortcuts);
 
   useEffect(() => {
-    fetch("/knowledge-graph.json")
+    fetch(tokenUrl("/knowledge-graph.json"))
       .then((res) => res.json())
       .then((data: unknown) => {
         const result = validateGraph(data);
@@ -162,7 +169,7 @@ function App() {
   }, [setGraph]);
 
   useEffect(() => {
-    fetch("/diff-overlay.json")
+    fetch(tokenUrl("/diff-overlay.json"))
       .then((res) => {
         if (!res.ok) return null;
         return res.json();

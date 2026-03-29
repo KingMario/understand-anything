@@ -5,9 +5,39 @@ import type {
   KnowledgeGraph,
   TourStep,
 } from "@understand-anything/core/types";
+import type { ReactFlowInstance } from "@xyflow/react";
 
 export type Persona = "non-technical" | "junior" | "experienced";
 export type NavigationLevel = "overview" | "layer-detail";
+export type NodeType = "file" | "function" | "class" | "module" | "concept" | "config" | "document" | "service" | "table" | "endpoint" | "pipeline" | "schema" | "resource";
+export type Complexity = "simple" | "moderate" | "complex";
+export type EdgeCategory = "structural" | "behavioral" | "data-flow" | "dependencies" | "semantic";
+
+export interface FilterState {
+  nodeTypes: Set<NodeType>;
+  complexities: Set<Complexity>;
+  layerIds: Set<string>;
+  edgeCategories: Set<EdgeCategory>;
+}
+
+export const ALL_NODE_TYPES: NodeType[] = ["file", "function", "class", "module", "concept", "config", "document", "service", "table", "endpoint", "pipeline", "schema", "resource"];
+export const ALL_COMPLEXITIES: Complexity[] = ["simple", "moderate", "complex"];
+export const ALL_EDGE_CATEGORIES: EdgeCategory[] = ["structural", "behavioral", "data-flow", "dependencies", "semantic"];
+
+export const EDGE_CATEGORY_MAP: Record<EdgeCategory, string[]> = {
+  structural: ["imports", "exports", "contains", "inherits", "implements"],
+  behavioral: ["calls", "subscribes", "publishes", "middleware"],
+  "data-flow": ["reads_from", "writes_to", "transforms", "validates"],
+  dependencies: ["depends_on", "tested_by", "configures"],
+  semantic: ["related", "similar_to"],
+};
+
+const DEFAULT_FILTERS: FilterState = {
+  nodeTypes: new Set<NodeType>(ALL_NODE_TYPES),
+  complexities: new Set<Complexity>(ALL_COMPLEXITIES),
+  layerIds: new Set<string>(),
+  edgeCategories: new Set<EdgeCategory>(ALL_EDGE_CATEGORIES),
+};
 
 /** Categories used for node type filter toggles. Single source of truth for NodeCategory. */
 export type NodeCategory = "code" | "config" | "docs" | "infra" | "data";
@@ -55,6 +85,13 @@ interface DashboardStore {
   // Sidebar navigation history (stack of visited node IDs)
   nodeHistory: string[];
 
+  // Filter & Export features
+  filters: FilterState;
+  filterPanelOpen: boolean;
+  exportMenuOpen: boolean;
+  pathFinderOpen: boolean;
+  reactFlowInstance: ReactFlowInstance | null;
+
   // Node type category filters
   nodeTypeFilters: Record<NodeCategory, boolean>;
   toggleNodeTypeFilter: (category: NodeCategory) => void;
@@ -76,6 +113,14 @@ interface DashboardStore {
   setDiffOverlay: (changed: string[], affected: string[]) => void;
   toggleDiffMode: () => void;
   clearDiffOverlay: () => void;
+
+  toggleFilterPanel: () => void;
+  toggleExportMenu: () => void;
+  togglePathFinder: () => void;
+  setReactFlowInstance: (instance: ReactFlowInstance | null) => void;
+  setFilters: (filters: Partial<FilterState>) => void;
+  resetFilters: () => void;
+  hasActiveFilters: () => boolean;
 
   startTour: () => void;
   stopTour: () => void;
@@ -130,6 +175,12 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
 
   focusNodeId: null,
   nodeHistory: [],
+
+  filters: { ...DEFAULT_FILTERS, nodeTypes: new Set(DEFAULT_FILTERS.nodeTypes), complexities: new Set(DEFAULT_FILTERS.complexities), layerIds: new Set(DEFAULT_FILTERS.layerIds), edgeCategories: new Set(DEFAULT_FILTERS.edgeCategories) },
+  filterPanelOpen: false,
+  exportMenuOpen: false,
+  pathFinderOpen: false,
+  reactFlowInstance: null,
 
   nodeTypeFilters: { code: true, config: true, docs: true, infra: true, data: true },
 
@@ -290,6 +341,43 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
       changedNodeIds: new Set<string>(),
       affectedNodeIds: new Set<string>(),
     }),
+
+  toggleFilterPanel: () => set((state) => ({
+    filterPanelOpen: !state.filterPanelOpen,
+    exportMenuOpen: false,
+  })),
+
+  toggleExportMenu: () => set((state) => ({
+    exportMenuOpen: !state.exportMenuOpen,
+    filterPanelOpen: false,
+  })),
+
+  togglePathFinder: () => set((state) => ({
+    pathFinderOpen: !state.pathFinderOpen,
+  })),
+
+  setReactFlowInstance: (instance) => set({ reactFlowInstance: instance }),
+
+  setFilters: (newFilters) => set((state) => ({
+    filters: { ...state.filters, ...newFilters },
+  })),
+
+  resetFilters: () => set({
+    filters: {
+      nodeTypes: new Set<NodeType>(ALL_NODE_TYPES),
+      complexities: new Set<Complexity>(ALL_COMPLEXITIES),
+      layerIds: new Set<string>(),
+      edgeCategories: new Set<EdgeCategory>(ALL_EDGE_CATEGORIES),
+    },
+  }),
+
+  hasActiveFilters: () => {
+    const { filters } = get();
+    return filters.nodeTypes.size !== ALL_NODE_TYPES.length
+      || filters.complexities.size !== ALL_COMPLEXITIES.length
+      || filters.layerIds.size > 0
+      || filters.edgeCategories.size !== ALL_EDGE_CATEGORIES.length;
+  },
 
   startTour: () => {
     const { graph } = get();

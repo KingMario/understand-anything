@@ -8,6 +8,9 @@ import SearchBar from "./components/SearchBar";
 import NodeInfo from "./components/NodeInfo";
 import LayerLegend from "./components/LayerLegend";
 import DiffToggle from "./components/DiffToggle";
+import FilterPanel from "./components/FilterPanel";
+import ExportMenu from "./components/ExportMenu";
+import PathFinderModal from "./components/PathFinderModal";
 import LearnPanel from "./components/LearnPanel";
 import PersonaSelector from "./components/PersonaSelector";
 import ProjectOverview from "./components/ProjectOverview";
@@ -72,6 +75,8 @@ function Dashboard({ accessToken }: { accessToken: string }) {
   const codeViewerOpen = useDashboardStore((s) => s.codeViewerOpen);
   const closeCodeViewer = useDashboardStore((s) => s.closeCodeViewer);
   const setDiffOverlay = useDashboardStore((s) => s.setDiffOverlay);
+  const pathFinderOpen = useDashboardStore((s) => s.pathFinderOpen);
+  const togglePathFinder = useDashboardStore((s) => s.togglePathFinder);
   const nodeTypeFilters = useDashboardStore((s) => s.nodeTypeFilters);
   const toggleNodeTypeFilter = useDashboardStore((s) => s.toggleNodeTypeFilter);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -102,11 +107,17 @@ function Dashboard({ accessToken }: { accessToken: string }) {
       // Navigation
       {
         key: "Escape",
-        description: "Close panels / go back to overview",
+        description: "Close panels and modals / go back to overview",
         action: () => {
           // Read from store at invocation time to avoid stale closures
           const state = useDashboardStore.getState();
-          if (state.codeViewerOpen) {
+          if (state.pathFinderOpen) {
+            state.togglePathFinder();
+          } else if (state.filterPanelOpen) {
+            state.toggleFilterPanel();
+          } else if (state.exportMenuOpen) {
+            state.toggleExportMenu();
+          } else if (state.codeViewerOpen) {
             state.closeCodeViewer();
           } else if (state.selectedNodeId) {
             state.selectNode(null);
@@ -161,6 +172,33 @@ function Dashboard({ accessToken }: { accessToken: string }) {
         action: () => {
           const state = useDashboardStore.getState();
           state.toggleDiffMode();
+        },
+        category: "View",
+      },
+      {
+        key: "f",
+        description: "Toggle filter panel",
+        action: () => {
+          const state = useDashboardStore.getState();
+          state.toggleFilterPanel();
+        },
+        category: "View",
+      },
+      {
+        key: "e",
+        description: "Toggle export menu",
+        action: () => {
+          const state = useDashboardStore.getState();
+          state.toggleExportMenu();
+        },
+        category: "View",
+      },
+      {
+        key: "p",
+        description: "Open path finder",
+        action: () => {
+          const state = useDashboardStore.getState();
+          state.togglePathFinder();
         },
         category: "View",
       },
@@ -242,46 +280,77 @@ function Dashboard({ accessToken }: { accessToken: string }) {
     <ThemeProvider metaTheme={metaTheme}>
     <div className="h-screen w-screen flex flex-col bg-root text-text-primary noise-overlay">
       {/* Header */}
-      <header className="flex items-center justify-between px-5 py-3 bg-surface border-b border-border-subtle shrink-0">
-        <div className="flex items-center gap-5">
+      <header className="flex items-center px-5 py-3 bg-surface border-b border-border-subtle shrink-0 gap-4">
+        {/* Left — fixed */}
+        <div className="flex items-center gap-5 shrink-0">
           <h1 className="font-serif text-lg text-text-primary tracking-wide">
             {graph?.project.name ?? "Understand Anything"}
           </h1>
           <div className="w-px h-5 bg-border-subtle" />
           <PersonaSelector />
         </div>
-        <div className="flex items-center gap-4">
-          <DiffToggle />
-          <div className="flex items-center gap-1">
-            {([
-              { key: "code", label: "Code", color: "var(--color-node-file)" },
-              { key: "config", label: "Config", color: "var(--color-node-config)" },
-              { key: "docs", label: "Docs", color: "var(--color-node-document)" },
-              { key: "infra", label: "Infra", color: "var(--color-node-service)" },
-              { key: "data", label: "Data", color: "var(--color-node-table)" },
-            ] as const).map((cat) => (
-              <button
-                key={cat.key}
-                onClick={() => toggleNodeTypeFilter(cat.key)}
-                className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded border transition-colors flex items-center gap-1.5 ${
-                  nodeTypeFilters[cat.key] !== false
-                    ? "border-border-medium bg-elevated text-text-secondary hover:text-text-primary"
-                    : "border-transparent bg-transparent text-text-muted/40 line-through hover:text-text-muted"
-                }`}
-                title={`${nodeTypeFilters[cat.key] !== false ? "Hide" : "Show"} ${cat.label} nodes`}
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{
-                    backgroundColor: cat.color,
-                    opacity: nodeTypeFilters[cat.key] !== false ? 1 : 0.3,
-                  }}
-                />
-                {cat.label}
-              </button>
-            ))}
+
+        {/* Middle — scrollable legends */}
+        <div className="flex-1 min-w-0 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-4 w-max">
+            <DiffToggle />
+            <div className="flex items-center gap-1">
+              {([
+                { key: "code", label: "Code", color: "var(--color-node-file)" },
+                { key: "config", label: "Config", color: "var(--color-node-config)" },
+                { key: "docs", label: "Docs", color: "var(--color-node-document)" },
+                { key: "infra", label: "Infra", color: "var(--color-node-service)" },
+                { key: "data", label: "Data", color: "var(--color-node-table)" },
+              ] as const).map((cat) => (
+                <button
+                  key={cat.key}
+                  onClick={() => toggleNodeTypeFilter(cat.key)}
+                  className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded border transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                    nodeTypeFilters[cat.key] !== false
+                      ? "border-border-medium bg-elevated text-text-secondary hover:text-text-primary"
+                      : "border-transparent bg-transparent text-text-muted/40 line-through hover:text-text-muted"
+                  }`}
+                  title={`${nodeTypeFilters[cat.key] !== false ? "Hide" : "Show"} ${cat.label} nodes`}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{
+                      backgroundColor: cat.color,
+                      opacity: nodeTypeFilters[cat.key] !== false ? 1 : 0.3,
+                    }}
+                  />
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+            <LayerLegend />
           </div>
-          <LayerLegend />
+        </div>
+
+        {/* Right — fixed actions */}
+        <div className="flex items-center gap-4 shrink-0">
+          <FilterPanel />
+          <ExportMenu />
+          <button
+            onClick={togglePathFinder}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-elevated text-text-secondary hover:text-text-primary transition-colors"
+            title="Find path between nodes (P)"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+              />
+            </svg>
+            Path
+          </button>
           <ThemePicker />
           <button
             onClick={() => setShowKeyboardHelp(true)}
@@ -362,6 +431,12 @@ function Dashboard({ accessToken }: { accessToken: string }) {
           onClose={() => setShowKeyboardHelp(false)}
         />
       )}
+
+      {/* Path Finder Modal */}
+      <PathFinderModal
+        isOpen={pathFinderOpen}
+        onClose={togglePathFinder}
+      />
     </div>
     </ThemeProvider>
   );

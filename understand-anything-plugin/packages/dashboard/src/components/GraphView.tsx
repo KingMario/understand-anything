@@ -484,6 +484,7 @@ function GraphViewInner() {
   const drillIntoLayer = useDashboardStore((s) => s.drillIntoLayer);
   const focusNodeId = useDashboardStore((s) => s.focusNodeId);
   const setFocusNode = useDashboardStore((s) => s.setFocusNode);
+  const setReactFlowInstance = useDashboardStore((s) => s.setReactFlowInstance);
   const { preset } = useTheme();
 
   const overviewGraph = useOverviewGraph();
@@ -561,6 +562,7 @@ function GraphViewInner() {
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
+        onInit={setReactFlowInstance}
         nodeTypes={nodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}

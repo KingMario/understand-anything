@@ -63,8 +63,8 @@ function buildDomainOverview(graph: KnowledgeGraph): { nodes: Node[]; edges: Edg
 
   const rfEdges: Edge[] = graph.edges
     .filter((e) => e.type === "cross_domain")
-    .map((e) => ({
-      id: `${e.source}-${e.target}`,
+    .map((e, i) => ({
+      id: `cd-${i}-${e.source}-${e.target}`,
       source: e.source,
       target: e.target,
       label: e.description ?? "",
@@ -142,8 +142,8 @@ function buildDomainDetail(
   });
   const rfNodes: Node[] = [...flowRfNodes, ...stepRfNodes];
 
-  const rfEdges: Edge[] = stepEdges.map((e) => ({
-    id: `${e.source}-${e.target}`,
+  const rfEdges: Edge[] = stepEdges.map((e, i) => ({
+    id: `fs-${i}-${e.source}-${e.target}`,
     source: e.source,
     target: e.target,
     style: { stroke: "var(--color-border-medium)", strokeWidth: 1.5 },

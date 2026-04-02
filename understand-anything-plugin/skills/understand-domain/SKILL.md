@@ -62,7 +62,7 @@ The preprocessing script does NOT produce a domain graph — it produces **raw m
 2. Validate using the standard graph validation pipeline (the schema now supports domain/flow/step types)
 3. If validation fails, log warnings but save what's valid (error tolerance)
 4. Save to `.understand-anything/domain-graph.json`
-5. Clean up `.understand-anything/intermediate/domain-analysis.json`
+5. Clean up `.understand-anything/intermediate/domain-analysis.json` and `.understand-anything/intermediate/domain-context.json`
 
 ### Phase 6: Launch Dashboard
 

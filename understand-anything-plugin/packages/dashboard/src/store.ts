@@ -11,7 +11,7 @@ export type Persona = "non-technical" | "junior" | "experienced";
 export type NavigationLevel = "overview" | "layer-detail";
 export type NodeType = "file" | "function" | "class" | "module" | "concept" | "config" | "document" | "service" | "table" | "endpoint" | "pipeline" | "schema" | "resource" | "domain" | "flow" | "step";
 export type Complexity = "simple" | "moderate" | "complex";
-export type EdgeCategory = "structural" | "behavioral" | "data-flow" | "dependencies" | "semantic";
+export type EdgeCategory = "structural" | "behavioral" | "data-flow" | "dependencies" | "semantic" | "domain";
 export type ViewMode = "structural" | "domain";
 
 export interface FilterState {
@@ -23,7 +23,7 @@ export interface FilterState {
 
 export const ALL_NODE_TYPES: NodeType[] = ["file", "function", "class", "module", "concept", "config", "document", "service", "table", "endpoint", "pipeline", "schema", "resource", "domain", "flow", "step"];
 export const ALL_COMPLEXITIES: Complexity[] = ["simple", "moderate", "complex"];
-export const ALL_EDGE_CATEGORIES: EdgeCategory[] = ["structural", "behavioral", "data-flow", "dependencies", "semantic"];
+export const ALL_EDGE_CATEGORIES: EdgeCategory[] = ["structural", "behavioral", "data-flow", "dependencies", "semantic", "domain"];
 
 export const EDGE_CATEGORY_MAP: Record<EdgeCategory, string[]> = {
   structural: ["imports", "exports", "contains", "inherits", "implements"],
@@ -31,9 +31,10 @@ export const EDGE_CATEGORY_MAP: Record<EdgeCategory, string[]> = {
   "data-flow": ["reads_from", "writes_to", "transforms", "validates"],
   dependencies: ["depends_on", "tested_by", "configures"],
   semantic: ["related", "similar_to"],
+  domain: ["contains_flow", "flow_step", "cross_domain"],
 };
 
-export const DOMAIN_EDGE_TYPES = ["contains_flow", "flow_step", "cross_domain"] as const;
+export const DOMAIN_EDGE_TYPES = EDGE_CATEGORY_MAP.domain;
 
 const DEFAULT_FILTERS: FilterState = {
   nodeTypes: new Set<NodeType>(ALL_NODE_TYPES),
@@ -209,6 +210,9 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
     const searchEngine = new SearchEngine(graph.nodes);
     const query = get().searchQuery;
     const searchResults = query.trim() ? searchEngine.search(query) : [];
+    const { viewMode, domainGraph, activeDomainId } = get();
+    // Preserve domain view if a domain graph is already loaded
+    const keepDomainView = viewMode === "domain" && domainGraph !== null;
     set({
       graph,
       searchEngine,
@@ -218,8 +222,8 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
       selectedNodeId: null,
       focusNodeId: null,
       nodeHistory: [],
-      viewMode: "structural" as const,
-      activeDomainId: null,
+      viewMode: keepDomainView ? "domain" as const : "structural" as const,
+      activeDomainId: keepDomainView ? activeDomainId : null,
     });
   },
 
@@ -477,10 +481,14 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
   },
 
   navigateToDomain: (domainId) => {
+    const { selectedNodeId, nodeHistory } = get();
+    const newHistory = selectedNodeId
+      ? [...nodeHistory, selectedNodeId].slice(-MAX_HISTORY)
+      : nodeHistory;
     set({
       activeDomainId: domainId,
-      selectedNodeId: null,
       focusNodeId: null,
+      nodeHistory: newHistory,
     });
   },
 

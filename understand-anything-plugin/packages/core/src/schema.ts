@@ -49,10 +49,10 @@ export const NODE_TYPE_ALIASES: Record<string, string> = {
   protobuf: "schema",
   definition: "schema",
   typedef: "schema",
-  // Domain aliases
+  // Domain aliases — "process" intentionally excluded (ambiguous with OS/Node.js process)
   business_domain: "domain",
-  process: "flow",
   business_flow: "flow",
+  business_process: "flow",
   task: "step",
   business_step: "step",
 };
@@ -88,7 +88,9 @@ export const EDGE_TYPE_ALIASES: Record<string, string> = {
   has_flow: "contains_flow",
   next_step: "flow_step",
   interacts_with: "cross_domain",
-  implemented_by: "implements",
+  // Note: "implemented_by" is intentionally NOT aliased to "implements" —
+  // it inverts edge direction (see commit fd0df15). The LLM should use
+  // "implements" with correct source/target instead.
 };
 
 // Aliases for complexity values LLMs commonly generate

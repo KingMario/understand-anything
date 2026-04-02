@@ -239,6 +239,7 @@ function useLayerDetailTopology() {
     const fileLevelTypes = new Set([
       "file", "config", "document", "service", "table",
       "endpoint", "pipeline", "schema", "resource",
+      "domain", "flow", "step",
     ]);
 
     // Non-technical persona: show module, concept, and file-level types (hide function/class)

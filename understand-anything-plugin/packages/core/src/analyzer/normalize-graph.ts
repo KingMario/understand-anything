@@ -63,7 +63,7 @@ function stripToValidPrefix(id: string): { prefix: string | null; path: string }
  */
 export function normalizeNodeId(
   id: string,
-  node: { type: string; filePath?: string; name?: string },
+  node: { type: string; filePath?: string; name?: string; parentFlowSlug?: string },
 ): string {
   const trimmed = id.trim();
   if (!trimmed) return trimmed;
@@ -96,11 +96,13 @@ export function normalizeNodeId(
     ) {
       return `${expectedPrefix}:${node.filePath}:${node.name}`;
     }
-    // For step nodes with filePath, reconstruct as step:filePath:slug
+    // For step nodes with filePath, reconstruct as step:[flowSlug:]filePath:slug
     if (node.type === "step" && node.filePath) {
       const slug = path.toLowerCase().replace(/\s+/g, "-");
-      // No flow discriminator available from bare path — use filePath:slug
-      return `${expectedPrefix}:${node.filePath}:${slug}`;
+      // Include flow discriminator if available (from edge-based lookup)
+      return node.parentFlowSlug
+        ? `${expectedPrefix}:${node.parentFlowSlug}:${node.filePath}:${slug}`
+        : `${expectedPrefix}:${node.filePath}:${slug}`;
     }
     return `${expectedPrefix}:${path}`;
   }
@@ -113,11 +115,16 @@ const VALID_COMPLEXITIES = new Set(["simple", "moderate", "complex"]);
 const COMPLEXITY_STRING_MAP: Record<string, string> = {
   low: "simple",
   easy: "simple",
+  trivial: "simple",
+  basic: "simple",
   medium: "moderate",
   intermediate: "moderate",
+  mid: "moderate",
+  average: "moderate",
   high: "complex",
   hard: "complex",
   difficult: "complex",
+  advanced: "complex",
 };
 
 /**
@@ -166,6 +173,24 @@ export interface NormalizeBatchResult {
   stats: NormalizationStats;
 }
 
+const PREFIX_TO_TYPE: Record<string, string> = {
+  file: "file", func: "function", class: "class", module: "module",
+  concept: "concept", config: "config", document: "document",
+  service: "service", table: "table", endpoint: "endpoint",
+  pipeline: "pipeline", schema: "schema", resource: "resource",
+  domain: "domain", flow: "flow", step: "step",
+};
+
+/** Infer node type from an ID's prefix (e.g. "step:foo" → "step"). Falls back to "file". */
+function inferTypeFromId(id: string): string {
+  const colonIdx = id.indexOf(":");
+  if (colonIdx > 0) {
+    const prefix = id.slice(0, colonIdx);
+    if (prefix in PREFIX_TO_TYPE) return PREFIX_TO_TYPE[prefix];
+  }
+  return "file";
+}
+
 /**
  * Normalizes a merged batch output: fixes node IDs and numeric complexity,
  * rewrites edge references, deduplicates nodes and edges, and drops dangling edges.
@@ -188,6 +213,24 @@ export function normalizeBatchOutput(data: {
 
   const idMap = new Map<string, string>();
 
+  // Build step→flow slug map from flow_step edges so bare-path step IDs
+  // can include the flow discriminator to avoid collisions.
+  const stepToFlowSlug = new Map<string, string>();
+  const flowNodeNames = new Map<string, string>();
+  for (const raw of data.nodes) {
+    if (String(raw.type ?? "") === "flow" && raw.id && raw.name) {
+      flowNodeNames.set(String(raw.id), String(raw.name).toLowerCase().replace(/\s+/g, "-"));
+    }
+  }
+  for (const raw of data.edges) {
+    if (String(raw.type ?? "") === "flow_step" && raw.source && raw.target) {
+      const flowSlug = flowNodeNames.get(String(raw.source));
+      if (flowSlug) {
+        stepToFlowSlug.set(String(raw.target), flowSlug);
+      }
+    }
+  }
+
   // Pass 1: Normalize node IDs and numeric complexity
   const nodes = data.nodes.map((raw) => {
     const oldId = String(raw.id ?? "");
@@ -196,6 +239,7 @@ export function normalizeBatchOutput(data: {
       type: nodeType,
       filePath: typeof raw.filePath === "string" ? raw.filePath : undefined,
       name: typeof raw.name === "string" ? raw.name : undefined,
+      parentFlowSlug: nodeType === "step" ? stepToFlowSlug.get(oldId) : undefined,
     });
 
     if (newId !== oldId) {
@@ -205,11 +249,15 @@ export function normalizeBatchOutput(data: {
 
     const result: Record<string, unknown> = { ...raw, id: newId };
 
-    // Only fix numeric complexity here — string aliases are handled by upstream's
-    // COMPLEXITY_ALIASES in autoFixGraph
-    if (typeof raw.complexity === "number") {
-      result.complexity = normalizeComplexity(raw.complexity);
-      stats.complexityFixed++;
+    // Normalize both numeric and non-canonical string complexity values.
+    // Upstream's COMPLEXITY_ALIASES handles some strings, but not all variants
+    // (e.g. "trivial", "advanced"). Normalizing here catches them early.
+    if (raw.complexity !== undefined) {
+      const normalized = normalizeComplexity(raw.complexity);
+      if (normalized !== raw.complexity) {
+        result.complexity = normalized;
+        stats.complexityFixed++;
+      }
     }
 
     return result;
@@ -233,13 +281,16 @@ export function normalizeBatchOutput(data: {
     let newTarget = idMap.get(oldTarget) ?? oldTarget;
 
     // Fallback: if endpoint not found in idMap, normalize it directly
-    // (handles cross-variant malformed IDs between nodes and edges)
+    // (handles cross-variant malformed IDs between nodes and edges).
+    // Try the edge's implied type first (from prefix), then fall back to "file".
     if (!validNodeIds.has(newSource)) {
-      const normalized = normalizeNodeId(newSource, { type: "file" });
+      const inferredType = inferTypeFromId(newSource);
+      const normalized = normalizeNodeId(newSource, { type: inferredType });
       if (validNodeIds.has(normalized)) newSource = normalized;
     }
     if (!validNodeIds.has(newTarget)) {
-      const normalized = normalizeNodeId(newTarget, { type: "file" });
+      const inferredType = inferTypeFromId(newTarget);
+      const normalized = normalizeNodeId(newTarget, { type: inferredType });
       if (validNodeIds.has(normalized)) newTarget = normalized;
     }
 
